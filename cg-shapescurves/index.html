@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/>
+    <title>Line Drawing - Shapes & Curves</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+    <script type="application/javascript" src="scripts/renderer.js"></script>
+    <script type="application/javascript" src="scripts/slideshow.js"></script>
+</head>
+<body onload="init()">
+    <div id="wrapper">
+        <div id="content">
+            <h1>Line Drawing &ndash; Shapes & Curves</h1>
+            <div id="slideshow">
+                <canvas id="view"></canvas>
+                <div id="slide_label" :style="'width: ' + view.width + 'px;'">
+                    <img class="slide_arrow" src="images/left_icon.png" alt="left arrow" height="32" width="auto" @click="prevSlide" />
+                    <p>{{ slide_description[slide_idx] }}</p>
+                    <img class="slide_arrow" src="images/right_icon.png" alt="left arrow" height="32" width="auto" @click="nextSlide" />
+                </div>
+            </div>
+            <br/>
+            <div class="spacer"></div>
+            <div id="ui">
+                <label for="sections">Curve Sections: </label>
+                <input id="sections" type="range" min="4" max="36" step="2" v-model="curve_sections" />
+                <output id="section_out">{{ curve_sections }}</output>
+                <div style="width:35px;"></div>
+                <label for="show_points">Show Point Data</label>
+                <input id="show_points" type="checkbox" v-model="show_points" />
+            </div>
+        </div>
+    </div>
+</body>
+</html>
