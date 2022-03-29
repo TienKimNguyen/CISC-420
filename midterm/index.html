@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <title>CISC 420: Intersection Calculation</title>
+        <script type="application/javascript">
+            // Feel free to change these values when testing your code
+            let point0 = {x: -50, y: 100}
+            let point1 = {x: 300, y: 800};
+            let view = {left: 0, right: 600, bottom: 0, top: 600};
+            
+            function init() {
+                let p0 = document.getElementById('p0');
+                let p1 = document.getElementById('p1');
+                p0.textContent = '(' + point0.x + ',' + point0.y + ')';
+                p1.textContent = '(' + point1.x + ',' + point1.y + ')';
+            }
+            
+            function calculateIntersection() {
+                let edge = document.getElementById('edge-select');
+                let pt = null;
+                if (edge.value === 'left' || edge.value === 'right') {
+                    pt = calculateIntersectionLeftRight(point0, point1, view[edge.value]);
+                }
+                else {
+                    pt = calculateIntersectionBottomTop(point0, point1, view[edge.value]);
+                }
+                let intersection = document.getElementById('intersection');
+                intersection.textContent = '(' + pt.x + ',' + pt.y + ')';
+            }
+            
+            function calculateIntersectionLeftRight(pt0, pt1, x_val) {
+                let intersect_pt = {x: x_val, y: 0};
+                let t = (x_val - pt0.x) / (pt1.x - pt0.x);
+                intersect_pt.y = (1 - t) * pt0.y + t * pt1.y;
+                return intersect_pt;
+            }
+            
+            function calculateIntersectionBottomTop(pt0, pt1, y_val) {
+                let intersect_pt = {x: 0, y: y_val};
+                let t = (y_val - pt0.y) / (pt1.y - pt0.y);
+                intersect_pt.x = (1 - t) * pt0.x + t * pt1.x;
+                return intersect_pt;
+            }
+        </script>
+    </head>
+    <body onload="init()">
+        <h1>Intersection Calculation</h1>
+        <p>The intersection of line <span id="p0"></span> to <span id="p1"></span> with the
+            <select id="edge-select">
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+                <option value="bottom">Bottom</option>
+                <option value="top">Top</option>
+            </select>
+        edge is at <span id="intersection">(?,?)</span></p>
+        <button type="button" onclick="calculateIntersection()">Calculate</button>
+    </body>
+</html>
