@@ -3,12 +3,12 @@ let ctx;
 let scene;
 let start_time;
 
-const LEFT =   32; // binary 100000
-const RIGHT =  16; // binary 010000
+const LEFT = 32; // binary 100000
+const RIGHT = 16; // binary 010000
 const BOTTOM = 8;  // binary 001000
-const TOP =    4;  // binary 000100
-const FAR =    2;  // binary 000010
-const NEAR =   1;  // binary 000001
+const TOP = 4;  // binary 000100
+const FAR = 2;  // binary 000010
+const NEAR = 1;  // binary 000001
 const FLOAT_EPSILON = 0.000001;
 
 // Initialization function - called when web page loads
@@ -34,16 +34,16 @@ function init() {
             {
                 type: 'generic',
                 vertices: [
-                    Vector4(0,  0, -30, 1),
-                    Vector4(20,  0, -30, 1),
+                    Vector4(0, 0, -30, 1),
+                    Vector4(20, 0, -30, 1),
                     Vector4(20, 12, -30, 1),
                     Vector4(10, 20, -30, 1),
-                    Vector4( 0, 12, -30, 1),
-                    Vector4( 0,  0, -60, 1),
-                    Vector4(20,  0, -60, 1),
+                    Vector4(0, 12, -30, 1),
+                    Vector4(0, 0, -60, 1),
+                    Vector4(20, 0, -60, 1),
                     Vector4(20, 12, -60, 1),
                     Vector4(10, 20, -60, 1),
-                    Vector4( 0, 12, -60, 1)
+                    Vector4(0, 12, -60, 1)
                 ],
                 edges: [
                     [0, 1, 2, 3, 4, 0],
@@ -61,7 +61,7 @@ function init() {
 
     // event handler for pressing arrow keys
     document.addEventListener('keydown', onKeyDown, false);
-    
+
     // start animation loop
     start_time = performance.now(); // current timestamp in milliseconds
     window.requestAnimationFrame(animate);
@@ -71,7 +71,7 @@ function init() {
 function animate(timestamp) {
     // step 1: calculate time (time since start)
     let time = timestamp - start_time;
-    
+
     // step 2: transform models based on time
     // TODO: implement this!
 
@@ -86,7 +86,7 @@ function animate(timestamp) {
 // Main drawing code - use information contained in variable `scene`
 function drawScene() {
     console.log(scene);
-    
+
     // TODO: implement drawing here!
     // For each model, for each edge
     //  * transform to canonical view volume
@@ -110,10 +110,10 @@ function outcodeParallel(vertex) {
     else if (vertex.y > (1.0 + FLOAT_EPSILON)) {
         outcode += TOP;
     }
-    if (vertex.x < (-1.0 - FLOAT_EPSILON)) {
+    if (vertex.z < (-1.0 - FLOAT_EPSILON)) {
         outcode += FAR;
     }
-    else if (vertex.x > (0.0 + FLOAT_EPSILON)) {
+    else if (vertex.z > (0.0 + FLOAT_EPSILON)) {
         outcode += NEAR;
     }
     return outcode;
@@ -134,10 +134,10 @@ function outcodePerspective(vertex, z_min) {
     else if (vertex.y > (-vertex.z + FLOAT_EPSILON)) {
         outcode += TOP;
     }
-    if (vertex.x < (-1.0 - FLOAT_EPSILON)) {
+    if (vertex.z < (-1.0 - FLOAT_EPSILON)) {
         outcode += FAR;
     }
-    else if (vertex.x > (z_min + FLOAT_EPSILON)) {
+    else if (vertex.z > (z_min + FLOAT_EPSILON)) {
         outcode += NEAR;
     }
     return outcode;
@@ -146,30 +146,203 @@ function outcodePerspective(vertex, z_min) {
 // Clip line - should either return a new line (with two endpoints inside view volume) or null (if line is completely outside view volume)
 function clipLineParallel(line) {
     let result = null;
-    let p0 = Vector3(line.pt0.x, line.pt0.y, line.pt0.z); 
+    let p0 = Vector3(line.pt0.x, line.pt0.y, line.pt0.z);
     let p1 = Vector3(line.pt1.x, line.pt1.y, line.pt1.z);
     let out0 = outcodeParallel(p0);
     let out1 = outcodeParallel(p1);
-    
-    // TODO: implement clipping here!
-    
+
+    if (out0 | out1 == 0) {
+        result = line;
+        return result;
+    } else if (out0 & out1 != 0) {
+        return null;
+    } else {
+        // Choose an endpoint outside of the view volume
+        let selected = 0;
+        let selectedEndpoint = null;
+        if (out0 == 0 & out1 != 0) {
+            selected = out1;
+            selectedEndpoint = p1;
+        } else {
+            selected = out0;
+            selectedEndpoint = p0;
+        }
+
+        // Calculate intersection point between line and corresponding edge
+        let intersect = new Vector3(0, 0, 0);
+        if (selected & LEFT == LEFT || selected & RIGHT == RIGHT){
+            if (selected & LEFT == LEFT){
+                intersect.x = -1;
+            } else {
+                intersect.x = 1; 
+            }
+            t = (intersect.x - p0.x) / (p1.x - p0.x);
+            intersect.y = p0.y + t * (p1.y - p0.y);
+            intersect.z = p0.z + t * (p1.z - p0.z);
+        } else if (selected & BOTTOM == BOTTOM || selected & TOP == TOP){
+            if (selected & BOTTOM == BOTTOM){
+                intersect.y = -1;
+            } else {
+                intersect.y = 1;
+            }
+            t = (intersect.y - p0.y) / (p1.y - p0.y);
+            intersect.x = p0.x + t * (p1.x - p0.x);
+            intersect.z = p0.z + t * (p1.z - p0.z);
+        } else if (selected & FAR == FAR || selected & NEAR == NEAR){
+            if (selected & FAR == FAR) {
+                intersect.z = -1;
+            } else {
+                intersect.z = 0;
+            }
+            t = (intersect.z - p0.z) / (p1.z - p0.z);
+            intersect.x = p0.x + t * (p1.x - p0.x);
+            intersect.y = p0.y + t * (p1.y - p0.y);
+        }       
+        
+        // Replace selected endpoint with this intersection point
+        if (selectedEndpoint == p0){
+            p0 = intersect;
+            out0 = outcodeParallel(p0);
+        } else {
+            p1 = intersect;
+            out1 = outcodeParallel(p1);
+        }
+       
+        // Create a new line for clipped line
+        result = {  
+            pt0: {
+                x: p0.x,
+                y: p0.y,
+                z: p0.z
+            },
+            pt1: {
+                x: p1.x,
+                y: p1.y,
+                z: p1.z
+            }
+        }; 
+        result = clipLineParallel(result);
+    }
     return result;
 }
 
 // Clip line - should either return a new line (with two endpoints inside view volume) or null (if line is completely outside view volume)
-function clipLinePerspective(line, z_min) {
-    let result = null;
-    let p0 = Vector3(line.pt0.x, line.pt0.y, line.pt0.z); 
+function clipLinePerspective(line, z_min) 
+{
+    let p0 = Vector3(line.pt0.x, line.pt0.y, line.pt0.z);
     let p1 = Vector3(line.pt1.x, line.pt1.y, line.pt1.z);
+    let result = {  
+                    pt0: 
+                    {
+                        x: p0.x,
+                        y: p0.y,
+                        z: p0.z
+                    },
+                    pt1: 
+                    {
+                        x: p1.x,
+                        y: p1.y,
+                        z: p1.z
+                    }
+                 };
     let out0 = outcodePerspective(p0, z_min);
     let out1 = outcodePerspective(p1, z_min);
-    
-    // TODO: implement clipping here!
-    
+
+    let trivial = FALSE;
+    let t = 0;
+    let deltax = 0;
+    let deltay = 0;
+    let deltaz = 0;
+    let x = 0;
+    let y = 0; 
+    let z = 0;
+    // Loop until we get trivial results - first loop will always run
+    while(!trivial)
+    {
+        if(out0 | out1 == 0)
+        {
+            trivial = TRUE;
+        }
+        else if(out0 & out1 != 0)
+        {
+            trivial = TRUE;
+            result = null;
+        }
+        else
+        {
+            // choose point on outside, I always choose p0. If p0 is inside, switch with p1
+            if(out0 == 0)
+            {
+                let temp = p0;
+                p0 = p1;
+                p1 = temp;
+                out0 = outcodePerspective(p0, z_min);
+                out1 = outcodePerspective(p1, z_min);
+            }
+            deltax = p1.x - p0.x;
+            deltay = p1.y - p0.y;
+            deltaz = p1.z - p0.z;
+            let intersect = Vector3(x,y,z);
+            // find first bit set to 1, I think they should waterfall down in this order, no extra work needed?? - wrong
+            if(out0 & LEFT == LEFT)
+            {
+                t = (-p0.x + p0.z)/(deltax - deltaz);
+            }
+            else if(out0 & RIGHT == RIGHT)
+            {
+                t = (p0.x + p0.z)/(-deltax - deltaz);
+            }
+            else if(out0 & BOTTOM == BOTTOM)
+            {
+                t = (-p0.y + p0.z)/(deltay - deltaz);
+            }
+            else if(out0 & TOP == TOP)
+            {
+                t = (p0.y + p0.z)/(-deltay - deltaz);
+            }
+            else if(out0 & FAR == FAR)
+            {
+                t = (-p0.z - 1)/(deltaz);
+            }
+            else
+            {
+                t = (p0.z - z_min)/(-deltaz);
+            }
+            // calculate intersection point based on t calculated above
+            intersect.x = (1-t)*p0.x + t*p1.x;
+            intersect.y = (1-t)*p0.y + t*p1.y;
+            intersect.z = (1-t)*p0.z + t*p1.z;
+            // set my selected point, p0, to the intersection point
+            p0 = intersect;
+            // KIM: We don't want to update/trim the old line. We want to make a copy
+            //      of it and work with that. That's why we return a new line (a.k.a.result)
+            //      result is an object with 2 items/points (pt0 and pt1), and each point has
+            //      its coordinates x, y, z, which we calculated - UPDATED, but ask about it
+            // set my new line since line is the result so she's ready to go - right???
+            result = {  
+                        pt0: 
+                        {
+                            x: p0.x,
+                            y: p0.y,
+                            z: p0.z
+                        },
+                        pt1: 
+                        {
+                            x: p1.x,
+                            y: p1.y,
+                            z: p1.z
+                        }
+                     };
+            // recalculate endpoint outcode; since I might have switched p0 and p1, I also recalculate for p1
+            out0 = outcodePerspective(p0, z_min);
+            out1 = outcodePerspective(p1, z_min);
+        }
+    }
     return result;
 }
 
 // Called when user presses a key on the keyboard down 
+// add things
 function onKeyDown(event) {
     switch (event.keyCode) {
         case 37: // LEFT Arrow
@@ -214,16 +387,16 @@ function loadNewScene() {
             if (scene.models[i].type === 'generic') {
                 for (let j = 0; j < scene.models[i].vertices.length; j++) {
                     scene.models[i].vertices[j] = Vector4(scene.models[i].vertices[j][0],
-                                                          scene.models[i].vertices[j][1],
-                                                          scene.models[i].vertices[j][2],
-                                                          1);
+                        scene.models[i].vertices[j][1],
+                        scene.models[i].vertices[j][2],
+                        1);
                 }
             }
             else {
                 scene.models[i].center = Vector4(scene.models[i].center[0],
-                                                 scene.models[i].center[1],
-                                                 scene.models[i].center[2],
-                                                 1);
+                    scene.models[i].center[1],
+                    scene.models[i].center[2],
+                    1);
             }
             scene.models[i].matrix = new Matrix(4, 4);
         }
