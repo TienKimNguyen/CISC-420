@@ -57,7 +57,87 @@ function createShaderProgram(vert_source, frag_source) {
 
 function initializeGlApp() {
     console.log(app);
+
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    gl.clearColor(0.8, 0.8, 0.8, 1.0); // colors range from 0 - 1
+    gl.enable(gl.DEPTH_TEST);
+
+    app.triangle = createTriangleVertexArrayObject();
+
+    // Transform to canonical view volume
+    // Need to specify L, R, B, T, N, F
+    mat4.ortho(app.projection_matrix, 0.0, canvas.width, 0.0, canvas.height, 0.1, 10.0);
+    mat4.identity(app.view_matrix); // set the view matrix to identity matrix b/c we want to look straight to the model
+    mat4.identity(app.model_matrix); // define model matrix as identity matrix
+    mat4.translate(app.model_matrix, app.model_matrix, vec3.fromValues(0.0, 0.0, -5.0)); // ()
+
+    gl.useProgram(app.program);
+    // Location where we want to upload, whether we want to transpose, and the data we want to upload
+    gl.uniformMatrix4fv(app.uniforms.projection_matrix, false, app.projection_matrix ); // use matrix 4x4 (Matrix4) with 4 components (f) and 4 values (v)
+    gl.uniformMatrix4fv(app.uniforms.view_matrix, false, app.view_matrix ); 
+    gl.uniformMatrix4fv(app.uniforms.model_matrix, false, app.model_matrix ); 
+    gl.useProgram(null);
+    
+    render();
 }
+
+function render() {
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); 
+
+    gl.useProgram(app.program);
+    
+    gl.bindVertexArray(app.triangle);
+    gl.drawElements(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0);
+    gl.bindVertexArray(null);
+
+    gl.useProgram(null);
+}
+
+function createTriangleVertexArrayObject () {
+    let vertex_array = gl.createVertexArray();
+    gl.bindVertexArray(vertex_array);
+
+    // Vertex Position Buffer
+    // USE THESE 3 VERTICES
+    let vertex_position_buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertex_position_buffer);
+    let vertices = [
+        200.0, 127.0, 0.0,
+        600.0, 127.0, 0.0,
+        400.0, 473.0, 0.0
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(app.vertex_position_attrib);
+    gl.vertexAttribPointer(app.vertex_position_attrib, 3, gl.FLOAT, false, 0, 0);
+
+
+    // COLORS
+    let vertex_color_buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertex_color_buffer);
+    let colors = [
+        1.0, 0.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(app.vertex_color_attrib);
+    gl.vertexAttribPointer(app.vertex_color_attrib, 3, gl.FLOAT, false, 0, 0);
+
+
+    // INDEX
+    let vertex_index_buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vertex_index_buffer);
+    let indices = [0, 1, 2];
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+    // UNBIND
+    gl.bindVertexArray(null);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+    return vertex_array;
+}
+
 
 // Function to read (i.e. download) text file
 function getTextFile(address) {
