@@ -62,7 +62,8 @@ function initializeGlApp() {
     gl.clearColor(0.8, 0.8, 0.8, 1.0); // colors range from 0 - 1
     gl.enable(gl.DEPTH_TEST);
 
-    app.triangle = createTriangleVertexArrayObject();
+    //app.triangle = createTriangleVertexArrayObject();
+    app.triangle = createSquareVertexArrayObject();
 
     // Transform to canonical view volume
     // Need to specify L, R, B, T, N, F
@@ -86,8 +87,15 @@ function render() {
 
     gl.useProgram(app.program);
     
+    //gl.bindVertexArray(app.triangle);
+    //gl.drawElements(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0);
+
     gl.bindVertexArray(app.triangle);
-    gl.drawElements(gl.TRIANGLES, 3, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+    
+    // If use triangle strip, change indices array to [0, 1, 2, 3]
+    // gl.drawElements(gl.TRIANGLE_STRIP, 4, gl.UNSIGNED_SHORT, 0);
+    
     gl.bindVertexArray(null);
 
     gl.useProgram(null);
@@ -128,6 +136,56 @@ function createTriangleVertexArrayObject () {
     let vertex_index_buffer = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vertex_index_buffer);
     let indices = [0, 1, 2];
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+    // UNBIND
+    gl.bindVertexArray(null);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+    return vertex_array;
+}
+
+function createSquareVertexArrayObject(){
+    let vertex_array = gl.createVertexArray();
+    gl.bindVertexArray(vertex_array);
+
+    // Vertex Position Buffer
+    // USE THESE 3 VERTICES
+    let vertex_position_buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertex_position_buffer);
+    let vertices = [
+        200.0, 100.0, 0.0,
+        400.0, 100.0, 0.0,
+        200.0, 300.0, 0.0,
+        400.0, 300.0, 0.0
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(app.vertex_position_attrib);
+    gl.vertexAttribPointer(app.vertex_position_attrib, 3, gl.FLOAT, false, 0, 0);
+
+
+    // COLORS
+    let vertex_color_buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertex_color_buffer);
+    let colors = [
+        1.0, 0.0, 0.0,
+        0.0, 1.0, 0.0,
+        0.0, 0.0, 1.0,
+        1.0, 1.0, 1.0
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(app.vertex_color_attrib);
+    gl.vertexAttribPointer(app.vertex_color_attrib, 3, gl.FLOAT, false, 0, 0); // 3 = grouping by 3 items in 1 group
+
+
+    // INDEX
+    let vertex_index_buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vertex_index_buffer);
+    let indices = [
+        0, 1, 2,
+        1, 3, 2
+    ]; // place in counter-clockwise order
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
 
     // UNBIND
