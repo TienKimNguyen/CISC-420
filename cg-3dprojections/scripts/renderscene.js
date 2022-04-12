@@ -25,11 +25,11 @@ function init() {
     // initial scene... feel free to change this
     scene = {
         view: {
-            type: 'perspective',
-            prp: Vector3(44, 20, -16),
-            srp: Vector3(20, 20, -40),
+            type: 'perspective', 
+            prp: Vector3(44, 20, -21),
+            srp: Vector3(20, 21, -45),
             vup: Vector3(0, 1, 0),
-            clip: [-19, 5, -10, 8, 12, 100]
+            clip: [-15, 5, -10, 10, 12, 100]
         },
         models: [
             {
@@ -56,6 +56,46 @@ function init() {
                     [4, 9]
                 ],
                 matrix: new Matrix(4, 4)
+            },
+            {
+                type: "cube",
+                center: Vector3(0, 20, -30),
+                width: 8,
+                height: 8,
+                depth: 8
+            },
+            {
+                type: "cylinder",
+                center: Vector3(0, 10, -20),
+                radius: 5,
+                height: 10,
+                sides: 12,
+                animation: {
+                    axis: "y",
+                    rps: 0.5
+                }
+            },
+            {
+                type: "cone",
+                center: Vector3(0, 30, -20),
+                radius: 5,
+                height: 10,
+                sides: 12,
+                animation: {
+                    axis: "z",
+                    rps: 1
+                }
+            },
+            {
+                type: "sphere",
+                center: Vector3(10, 40, -50),
+                radius: 10,
+                slices: 10,
+                stacks: 10,
+                animation: {
+                    axis: "x",
+                    rps: 2
+                }
             }
         ]
     };
@@ -73,19 +113,32 @@ function animate(timestamp) {
     // step 1: calculate time (time since start)
     let time = timestamp - start_time;
 
+    console.log(time)
+
     // step 2: transform models based on time
-    // TODO: implement this!
+
 
     // step 3: draw scene
     drawScene();
 
     // step 4: request next animation frame (recursively calling same function)
     // (may want to leave commented out while debugging initially)
-    // window.requestAnimationFrame(animate);
+    //window.requestAnimationFrame(animate);
 }
+
+function rotateX(theta){
+
+}
+
+function rotateY(theta){
+
+}
+
+
 
 // Main drawing code - use information contained in variable `scene`
 function drawScene() {
+    ctx.clearRect(0, 0, view.width, view.height);
     console.log(scene);
     let projectionType = scene.view.type;
     let transform = new Matrix(4, 4); // N_par or N_per
@@ -99,21 +152,50 @@ function drawScene() {
         transform = mat4x4Perspective(scene.view.prp, scene.view.srp, scene.view.vup, scene.view.clip);
         projection_M = mat4x4MPer();
     }
-    
+
     // CLIP against the canonical view volume
     let models = scene.models; // array of models
     for (let i = 0; i < models.length; i++) { // for each model
         let model = models[i]; // 1 model
-        let vertices = []; // list of vertices after 3D transformation
-        let clippedLines = [];
+        let modelVertices = []; // array of model's vertices
+        let modelEdges = []; // array of model's edges
 
-        for (let j = 0; j < model.vertices.length; j++) {
-            let vertex = Matrix.multiply([transform, model.vertices[j]]);
+        // Depend on model's type, assign arrays of vertices and edges above
+        if (model.type == "generic") {
+            modelVertices = model.vertices;
+            modelEdges = model.edges;
+        } else if (model.type == "cube") {
+            let cube = createCube(model.center, model.width, model.height, model.depth);
+            modelVertices = cube.vertices;
+            modelEdges = cube.edges;
+        } else if (model.type == "cylinder") {
+            let cylinder = createCylinder(model.center, model.radius, model.height, model.sides);
+            modelVertices = cylinder.vertices;
+            modelEdges = cylinder.edges;
+        } else if (model.type == "cone") {
+            let cone = createCone(model.center, model.radius, model.height, model.sides);
+            modelVertices = cone.vertices;
+            modelEdges = cone.edges;
+        } else if (model.type == "sphere") {
+            let sphere = createSphere(model.center, model.radius, model.slices, model.stacks);
+            modelVertices = sphere.vertices;
+            modelEdges = sphere.edges;
+        }
+        
+
+        //console.log(modelVertices);
+        //console.log(modelEdges)
+
+        let vertices = []; // list of vertices after 3D transformation
+        let clippedLines = []; // array of edges after clipping
+
+        for (let j = 0; j < modelVertices.length; j++) {
+            let vertex = Matrix.multiply([transform, modelVertices[j]]);
             vertices.push(vertex);
         }
 
-        for (let j = 0; j < model.edges.length; j++) { // for each edge array
-            let edges = model.edges[j]; // edge array
+        for (let j = 0; j < modelEdges.length; j++) { // for each edge array
+            let edges = modelEdges[j]; // edge array
             for (let k = 0; k < edges.length - 1; k++) { // for each edge in array
                 let pt0 = vertices[edges[k]]; // endpoint 1 - Vector 4
                 let pt1 = vertices[edges[k + 1]]; // endpoint 2 - Vector 4
@@ -121,14 +203,17 @@ function drawScene() {
                     pt0: pt0,
                     pt1: pt1
                 };
-                
+
                 let clippedEdge = null; // clipped edge
                 if (projectionType == "parallel") {
                     clippedEdge = clipLineParallel(edge);
                 } else {
-                    clippedEdge = clipLinePerspective(edge);
+                    let z_min = -scene.view.clip[4] / scene.view.clip[5];
+                    clippedEdge = clipLinePerspective(edge, z_min);
                 }
-                clippedLines.push(clippedEdge); // add clipped edge to clippedLines array
+                if(clippedEdge != null) {
+                    clippedLines.push(clippedEdge); // add clipped edge to clippedLines array
+                }
             }
         }
 
@@ -136,23 +221,23 @@ function drawScene() {
         // Translate and scale to the framebuffer bounds ([O, width] and [0,height] respectively).
         let pt0Array = []; // array containing 1st endpoint
         let pt1Array = []; // array containing 2nd endpoint
-        
-        let v = new Matrix(4,4); // matrix for transform and scale to fit the size of screen
-        v.values = [[view.width/2, 0, 0, view.width/2],
-                    [0, view.height/2, 0, view.height/2],
-                    [0, 0, 1, 0],
-                    [0, 0, 0, 1]];
-    
+
+        let v = new Matrix(4, 4); // matrix for transform and scale to fit the size of screen
+        v.values = [[view.width / 2, 0, 0, view.width / 2],
+        [0, view.height / 2, 0, view.height / 2],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1]];
+
         for (let i = 0; i < clippedLines.length; i++) {
             // Change it back to Vector 4 b/c clippedLines array contains only Vector3's
             let point0 = Vector4(clippedLines[i].pt0.x, clippedLines[i].pt0.y, clippedLines[i].pt0.z, 1);
             let point1 = Vector4(clippedLines[i].pt1.x, clippedLines[i].pt1.y, clippedLines[i].pt1.z, 1);
             pt0Array.push(Matrix.multiply([v, projection_M, point0]));
-            pt1Array.push(Matrix.multiply([v, projection_M, point1])) ;
+            pt1Array.push(Matrix.multiply([v, projection_M, point1]));
         }
 
         // Convert to Cartesian
-        for (let i = 0; i < pt0Array.length; i++){
+        for (let i = 0; i < pt0Array.length; i++) {
             // For point 1
             let x0 = pt0Array[i].x / pt0Array[i].w;
             let y0 = pt0Array[i].y / pt0Array[i].w;
@@ -167,11 +252,152 @@ function drawScene() {
         }
 
         // Draw line
-        for (let i = 0; i < pt0Array.length; i++){
+        for (let i = 0; i < pt0Array.length; i++) {
             drawLine(pt0Array[i].x, pt0Array[i].y, pt1Array[i].x, pt1Array[i].y);
         }
     }
 }
+
+// CUBE MODEL:
+function createCube(center, width, height, depth) {
+    // Width = x , height = y, depth = z
+    let x = center.x;
+    let y = center.y;
+    let z = center.z;
+
+    // Center is at (w/2, h/2, d/2)
+
+    let cube = {
+        vertices: [
+            Vector4(x - width / 2, y - height / 2, z + depth / 2, 1), // low left front
+            Vector4(x - width / 2, y + height / 2, z + depth / 2, 1), // high left front
+            Vector4(x + width / 2, y + height / 2, z + depth / 2, 1), // high right front
+            Vector4(x + width / 2, y - height / 2, z + depth / 2, 1), // low right front
+
+            Vector4(x - width / 2, y - height / 2, z - depth / 2, 1), // low left back
+            Vector4(x - width / 2, y + height / 2, z - depth / 2, 1), // high left back
+            Vector4(x + width / 2, y + height / 2, z - depth / 2, 1), // high right back
+            Vector4(x + width / 2, y - height / 2, z - depth / 2, 1), // low right back
+        ],
+        edges: [
+            [0, 1, 2, 3, 0],
+            [4, 5, 6, 7, 4],
+            [0, 4],
+            [1, 5],
+            [2, 6],
+            [3, 7],
+        ],
+    }
+    return cube;
+}
+
+// CREATE CYLINDER
+function createCylinder(center, radius, height, sides) {
+    let vertices = [];
+    let edges = [];
+    let degree = 360 / sides;
+
+    // Find coordinates of points
+    for (let i = 0; i < sides; i++) {
+        let x = center.x + Math.cos((Math.PI / 180) * i * degree) * radius;
+        let z = center.z + Math.sin((Math.PI / 180) * i * degree) * radius;
+        let y_top = center.y + height/2;
+        let y_bottom = center.y - height/2;
+
+        vertices.push(Vector4(x, y_top, z, 1));
+        vertices.push(Vector4(x, y_bottom, z, 1));
+    }
+
+    let arr1 = [];
+    let arr2 = [];
+    for (let i = 0; i < sides; i++) {
+        arr1[i] = 2*i;
+        arr2[i] = 2*i + 1;
+    }
+    arr1.push(0);
+    arr2.push(1);
+    edges.push(arr1);
+    edges.push(arr2);
+
+    for (let i = 0; i < sides; i++) {
+        edges.push([i * 2, i * 2 + 1]);
+    }
+
+    let cylinder = {
+        vertices: vertices,
+        edges: edges,
+    }
+    return cylinder;
+}
+
+// CREATE CONE
+function createCone(center, radius, height, sides) {
+    let vertices = [];
+    let edges = [];
+    let degree = 360 / sides;
+
+    // Find coordinates of points
+    for (let i = 0; i < sides; i++) {
+        let x = center.x + Math.cos((Math.PI / 180) * i * degree) * radius;
+        let z = center.z + Math.sin((Math.PI / 180) * i * degree) * radius;
+        let y = center.y;
+
+        vertices.push(Vector4(x, y, z, 1));
+    }
+
+    vertices.push(Vector4(center.x, center.y + height, center.z, 1));
+
+    let arr1 = [];
+
+    for (let i = 0; i < sides; i++) {
+        arr1.push(i);
+        edges.push([i,vertices.length - 1]);
+    }
+    
+    arr1.push(0);
+    edges.push(arr1);
+
+    let cone = {
+        vertices: vertices,
+        edges: edges,
+    }
+    return cone;
+}
+
+// CREATE SPHERE
+// I am deciding that slices are vertical slices and stacks are horizontal stacks
+function createSphere(center, radius, slices, stacks) {
+    let vertices = [];
+    let edges = [];
+    let degreeSlice = 2 * Math.PI / slices;
+    let degreeStack = Math.PI / stacks;
+
+    // Find coordinates of points
+    for (let r = 0; r < stacks + 1; r++) {
+        let phi = r * degreeStack;
+        for (let c = 0; c < slices; c++) {
+            let theta = c * degreeSlice;
+            let x = center.x + radius * Math.cos(theta) * Math.sin(phi);
+            let z = center.z + radius * Math.sin(phi) * Math.sin(theta);
+            let y = center.y + radius * Math.cos(phi);
+            vertices.push(Vector4(x, y, z, 1));
+        }
+    }
+
+    for (let r = 0; r < stacks; r++) {
+        for (let c = 0; c < slices; c++) {
+            edges.push([slices*r + c, slices*(r+1) + c]);
+            edges.push([slices*r + c, slices*r + c + 1]);
+        }
+    }
+
+    let sphere = {
+        vertices: vertices,
+        edges: edges,
+    }
+    return sphere;
+}
+
 
 // Get outcode for vertex (parallel view volume)
 function outcodeParallel(vertex) {
@@ -222,76 +448,82 @@ function outcodePerspective(vertex, z_min) {
 }
 
 // Clip line - should either return a new line (with two endpoints inside view volume) or null (if line is completely outside view volume)
+// fix
 function clipLineParallel(line) {
-    let result = null;
     let p0 = Vector3(line.pt0.x, line.pt0.y, line.pt0.z);
     let p1 = Vector3(line.pt1.x, line.pt1.y, line.pt1.z);
+    let result = {
+        pt0: Vector3(p0.x, p0.y, p0.z),
+        pt1: Vector3(p1.x, p1.y, p1.z)
+    }
     let out0 = outcodeParallel(p0);
     let out1 = outcodeParallel(p1);
 
-    if (out0 | out1 == 0) {
-        result = line;
-        return result;
-    } else if (out0 & out1 != 0) {
-        return null;
-    } else {
-        // Choose an endpoint outside of the view volume
-        let selected = 0;
-        let selectedEndpoint = null;
-        if (out0 == 0 & out1 != 0) {
-            selected = out1;
-            selectedEndpoint = p1;
+    let trivial = false;
+    while (!trivial) {
+        if ((out0 | out1) == 0) {
+            trivial = true;
+        } else if ((out0 & out1) != 0) {
+            trivial = true;
+            result = null;
         } else {
-            selected = out0;
-            selectedEndpoint = p0;
-        }
-
-        // Calculate intersection point between line and corresponding edge
-        let intersect = new Vector3(0, 0, 0);
-        if (selected & LEFT == LEFT || selected & RIGHT == RIGHT) {
-            if (selected & LEFT == LEFT) {
-                intersect.x = -1;
+            // Choose an endpoint outside of the view volume
+            let selected = 0;
+            let selectedEndpoint = null;
+            if (out0 == 0 & out1 != 0) {
+                selected = out1;
+                selectedEndpoint = p1;
             } else {
-                intersect.x = 1;
+                selected = out0;
+                selectedEndpoint = p0;
             }
-            t = (intersect.x - p0.x) / (p1.x - p0.x);
-            intersect.y = p0.y + t * (p1.y - p0.y);
-            intersect.z = p0.z + t * (p1.z - p0.z);
-        } else if (selected & BOTTOM == BOTTOM || selected & TOP == TOP) {
-            if (selected & BOTTOM == BOTTOM) {
-                intersect.y = -1;
-            } else {
-                intersect.y = 1;
-            }
-            t = (intersect.y - p0.y) / (p1.y - p0.y);
-            intersect.x = p0.x + t * (p1.x - p0.x);
-            intersect.z = p0.z + t * (p1.z - p0.z);
-        } else if (selected & FAR == FAR || selected & NEAR == NEAR) {
-            if (selected & FAR == FAR) {
-                intersect.z = -1;
-            } else {
-                intersect.z = 0;
-            }
-            t = (intersect.z - p0.z) / (p1.z - p0.z);
-            intersect.x = p0.x + t * (p1.x - p0.x);
-            intersect.y = p0.y + t * (p1.y - p0.y);
-        }
 
-        // Replace selected endpoint with this intersection point
-        if (selectedEndpoint == p0) {
-            p0 = intersect;
-            out0 = outcodeParallel(p0);
-        } else {
-            p1 = intersect;
-            out1 = outcodeParallel(p1);
-        }
+            // Calculate intersection point between line and corresponding edge
+            let intersect = new Vector3(0, 0, 0);
+            if (((selected & LEFT) == LEFT) || ((selected & RIGHT) == RIGHT)) {
+                if ((selected & LEFT) == LEFT) {
+                    intersect.x = -1;
+                } else {
+                    intersect.x = 1;
+                }
+                t = (intersect.x - p0.x) / (p1.x - p0.x);
+                intersect.y = p0.y + t * (p1.y - p0.y);
+                intersect.z = p0.z + t * (p1.z - p0.z);
+            } else if (((selected & BOTTOM) == BOTTOM) || ((selected & TOP) == TOP)) {
+                if ((selected & BOTTOM) == BOTTOM) {
+                    intersect.y = -1;
+                } else {
+                    intersect.y = 1;
+                }
+                t = (intersect.y - p0.y) / (p1.y - p0.y);
+                intersect.x = p0.x + t * (p1.x - p0.x);
+                intersect.z = p0.z + t * (p1.z - p0.z);
+            } else if (((selected & FAR) == FAR) || ((selected & NEAR) == NEAR)) {
+                if ((selected & FAR) == FAR) {
+                    intersect.z = -1;
+                } else {
+                    intersect.z = 0;
+                }
+                t = (intersect.z - p0.z) / (p1.z - p0.z);
+                intersect.x = p0.x + t * (p1.x - p0.x);
+                intersect.y = p0.y + t * (p1.y - p0.y);
+            }
 
-        // Create a new line for clipped line
-        line = {
-            pt0: Vector3(p0.x, p0.y, p0.z),
-            pt1: Vector3(p1.x, p1.y, p1.z)
-        };
-        result = clipLineParallel(line);
+            // Replace selected endpoint with this intersection point
+            if (selectedEndpoint == p0) {
+                p0 = intersect;
+                out0 = outcodeParallel(p0);
+            } else {
+                p1 = intersect;
+                out1 = outcodeParallel(p1);
+            }
+
+            // Create a new line for clipped line
+            result = {
+                pt0: Vector3(p0.x, p0.y, p0.z),
+                pt1: Vector3(p1.x, p1.y, p1.z)
+            };
+        }
     }
     return result;
 }
@@ -325,19 +557,19 @@ function clipLinePerspective(line, z_min) {
     let z = 0;
     // Loop until we get trivial results - first loop will always run
     while (!trivial) {
-        if (out0 | out1 == 0) {
+        if ((out0 | out1) == 0) {
             trivial = true;
         }
-        else if (out0 & out1 != 0) {
+        else if ((out0 & out1) != 0) {
             trivial = true;
             result = null;
         }
         else {
             // choose point on outside, I always choose p0. If p0 is inside, switch with p1
             if (out0 == 0) {
-                let temp = p0;
-                p0 = p1;
-                p1 = temp;
+                let temp = Vector3(p0.x, p0.y, p0.z);
+                p0 = Vector3(p1.x, p1.y, p1.z);
+                p1 = Vector3(temp.x, temp.y, temp.z);
                 out0 = outcodePerspective(p0, z_min);
                 out1 = outcodePerspective(p1, z_min);
             }
@@ -346,19 +578,19 @@ function clipLinePerspective(line, z_min) {
             deltaz = p1.z - p0.z;
             let intersect = Vector3(x, y, z);
             // find first bit set to 1, I think they should waterfall down in this order, no extra work needed?? - wrong
-            if (out0 & LEFT == LEFT) {
+            if ((out0 & LEFT) == LEFT) {
                 t = (-p0.x + p0.z) / (deltax - deltaz);
             }
-            else if (out0 & RIGHT == RIGHT) {
+            else if ((out0 & RIGHT) == RIGHT) {
                 t = (p0.x + p0.z) / (-deltax - deltaz);
             }
-            else if (out0 & BOTTOM == BOTTOM) {
+            else if ((out0 & BOTTOM) == BOTTOM) {
                 t = (-p0.y + p0.z) / (deltay - deltaz);
             }
-            else if (out0 & TOP == TOP) {
+            else if ((out0 & TOP) == TOP) {
                 t = (p0.y + p0.z) / (-deltay - deltaz);
             }
-            else if (out0 & FAR == FAR) {
+            else if ((out0 & FAR) == FAR) {
                 t = (-p0.z - 1) / (deltaz);
             }
             else {
@@ -368,7 +600,7 @@ function clipLinePerspective(line, z_min) {
             intersect.x = (1 - t) * p0.x + t * p1.x;
             intersect.y = (1 - t) * p0.y + t * p1.y;
             intersect.z = (1 - t) * p0.z + t * p1.z;
-            
+
             // set my selected point, p0, to the intersection point
             p0 = intersect;
 
@@ -394,29 +626,56 @@ function clipLinePerspective(line, z_min) {
 }
 
 // Called when user presses a key on the keyboard down 
-// add things
-function onKeyDown(event) 
-{
+// left and right need to be updated more
+function onKeyDown(event) {
+    // define uvn axes
     let n_axis = scene.view.prp.subtract(scene.view.srp);
-    let u_axis = scene.view.vup.cross(n_axis);
     n_axis.normalize();
+
+    let u_axis = scene.view.vup.cross(n_axis);
     u_axis.normalize();
+
+    let v_axis = n_axis.cross(u_axis);
+    v_axis.normalize();
+
+    // define transformation matrices for left/right
+    let toOrigin = new Matrix(4,4);
+    mat4x4Translate(toOrigin, -scene.view.prp.x, -scene.view.prp.y, -scene.view.prp.z);
+
+    let back = new Matrix(4,4);
+    mat4x4Translate(back, scene.view.prp.x, scene.view.prp.y, scene.view.prp.z);
+
+    let rotateV = new Matrix(4,4);
+    let newSRP = new Matrix(4,1);
+    let srpHomogenous = Vector4(scene.view.srp.x, scene.view.srp.y, scene.view.srp.z, 1);
+
     switch (event.keyCode) {
         case 37: // LEFT Arrow
-            console.log("left");
+            mat4x4RotateGivenAxis(rotateV, v_axis, 5);
+            newSRP = Matrix.multiply([back, rotateV, toOrigin, srpHomogenous]);
+            scene.view.srp.x = newSRP.x;
+            scene.view.srp.y = newSRP.y;
+            scene.view.srp.z = newSRP.z;
             break;
         case 39: // RIGHT Arrow
-            console.log("right");
+            mat4x4RotateGivenAxis(rotateV, v_axis, -5);
+            // Translate SRP to the origin, rotate it, and translate it back to where it was
+            newSRP = Matrix.multiply([back, rotateV, toOrigin, srpHomogenous]);
+            scene.view.srp.x = newSRP.x;
+            scene.view.srp.y = newSRP.y;
+            scene.view.srp.z = newSRP.z;
             break;
         case 65: // A key
             console.log("A");
-            scene.view.prp = scene.view.prp.add(u_axis);
-            scene.view.srp = scene.view.srp.add(u_axis);
+            // PRP and SRP move left (model appears to move right)
+            scene.view.prp = scene.view.prp.subtract(u_axis);
+            scene.view.srp = scene.view.srp.subtract(u_axis);
             break;
         case 68: // D key
             console.log("D");
-            scene.view.prp = scene.view.prp.subtract(u_axis);
-            scene.view.srp = scene.view.srp.subtract(u_axis);
+            // PRP and SRP move right (model appears to move left)
+            scene.view.prp = scene.view.prp.add(u_axis);
+            scene.view.srp = scene.view.srp.add(u_axis);
             break;
         case 83: // S key
             console.log("S");
@@ -429,8 +688,6 @@ function onKeyDown(event)
             scene.view.srp = scene.view.srp.subtract(n_axis);
             break;
     }
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, 800, 600);
     drawScene();
 }
 
@@ -468,6 +725,7 @@ function loadNewScene() {
             }
             scene.models[i].matrix = new Matrix(4, 4);
         }
+        drawScene();
     };
     reader.readAsText(scene_file.files[0], 'UTF-8');
 }

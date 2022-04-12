@@ -24,8 +24,13 @@ function init() {
         projection_matrix: mat4.create(),     // projection matrix (on CPU)
         view_matrix: mat4.create(),           // view matrix (on CPU)
         model_matrix: mat4.create(),          // model matrix (on CPU)
-        triangle: null                        // model 'vertex array object' (contains all attributes
-                                              // of the model - vertices, color, faces, ...)
+        triangle: null,                       // model 'vertex array object' (contains all attributes
+                                              // of the model - vertices, color, faces, ..
+        prev_time: 0,
+        fps_start: 0,
+        frame_count: 0,
+        x_position: 0,
+        x_velocity: 60.0,  
     };
 
     // Download and compile shaders into GPU programs
@@ -64,7 +69,7 @@ function initializeGlApp() {
 
     //app.triangle = createTriangleVertexArrayObject();
     app.triangle = createSquareVertexArrayObject();
-
+    
     // Transform to canonical view volume
     // Need to specify L, R, B, T, N, F
     mat4.ortho(app.projection_matrix, 0.0, canvas.width, 0.0, canvas.height, 0.1, 10.0);
@@ -79,7 +84,49 @@ function initializeGlApp() {
     gl.uniformMatrix4fv(app.uniforms.model_matrix, false, app.model_matrix ); 
     gl.useProgram(null);
     
+    app.prev_time = performance.now();
+    app.fps_start = performance.now();
+
+    animate(performance.now());
+}
+
+function animate(timestamp){
+    let elapsed_time = (timestamp - app.fps_start) / 1000.0; // those time are in millisecond => divide by 1000 = second
+    
+    // How many frames per second & print it out every 2s
+    if (elapsed_time > 2.0){
+        console.log((app.frame_count / elapsed_time).toFixed(1) + ' fps');
+        app.frame_count = 0;
+        app.fps_start = timestamp;
+    }
+
+    mat4.identity(app.model_matrix); // define model matrix as identity matrix
+    mat4.translate(app.model_matrix, app.model_matrix, vec3.fromValues(app.x_position, 0.0, -5.0));
+    gl.useProgram(app.program); // upload for every change in matrix
+    gl.uniformMatrix4fv(app.uniforms.model_matrix, false, app.model_matrix ); 
+    gl.useProgram(null);
+
     render();
+    app.frame_count++;
+
+    let delta_t = (timestamp - app.prev_time) / 1000.0;
+
+    app.x_position += app.x_velocity * delta_t;
+
+    if(app.x_position > (canvas.width / 2) - 200.0){
+        app.x_velocity *= -1.0;
+    } else  if (app.x_position < -((canvas.width / 2) - 200.0)){
+        app.x_velocity *= -1.0;
+    }
+
+    app.prev_time = timestamp;
+    
+  //setTimeout(() => {
+        window.requestAnimationFrame(animate); // This will refresh frequently depending on monitor's refreshing rate
+  //}, 100);
+  
+   
+   
 }
 
 function render() {
@@ -155,10 +202,10 @@ function createSquareVertexArrayObject(){
     let vertex_position_buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vertex_position_buffer);
     let vertices = [
-        200.0, 100.0, 0.0,
-        400.0, 100.0, 0.0,
-        200.0, 300.0, 0.0,
-        400.0, 300.0, 0.0
+        200.0, 200.0, 0.0,
+        400.0, 200.0, 0.0,
+        200.0, 400.0, 0.0,
+        400.0, 400.0, 0.0
     ];
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(app.vertex_position_attrib);
