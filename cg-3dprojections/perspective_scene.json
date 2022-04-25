@@ -1,0 +1,29 @@
+{
+    "view": {
+        "type": "perspective",
+        "prp": [44, 20, -20],
+        "srp": [20, 20, -40],
+        "vup": [0, 1, 0],
+        "clip": [-20, 15, -20, 15, 12, 100]
+    },
+    "models": [
+        {
+            "type": "cube",
+            "center": [0, 20, -50],
+            "width": 15,
+            "height": 15,
+            "depth": 15
+        },
+        {
+            "type": "cylinder",
+            "center": [0, 10, -20],
+            "radius": 5,
+            "height": 10,
+            "sides": 12,
+            "animation": {
+                "axis": "y",
+                "rps": 0.5
+            }
+        }
+    ]
+}

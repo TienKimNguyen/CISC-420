@@ -25,9 +25,9 @@ function init() {
     // initial scene... feel free to change this
     scene = {
         view: {
-            type: 'perspective', 
+            type: 'perspective',
             prp: Vector3(44, 20, -21),
-            srp: Vector3(20, 21, -45),
+            srp: Vector3(18, 20, -43),
             vup: Vector3(0, 1, 0),
             clip: [-15, 5, -10, 10, 12, 100]
         },
@@ -55,24 +55,34 @@ function init() {
                     [3, 8],
                     [4, 9]
                 ],
-                matrix: new Matrix(4, 4)
+                matrix: new Matrix(4, 4),
+                animation: {
+                    axis: "y",
+                    rps: 0
+                }
             },
             {
                 type: "cube",
-                center: Vector3(0, 20, -30),
+                center: Vector3(-5, 35, -35),
                 width: 8,
                 height: 8,
-                depth: 8
+                depth: 8,
+                matrix: new Matrix(4, 4),
+                animation: {
+                    axis: "x",
+                    rps: 0.5
+                }
             },
             {
                 type: "cylinder",
-                center: Vector3(0, 10, -20),
+                center: Vector3(-5, 10, -25),
                 radius: 5,
                 height: 10,
-                sides: 12,
+                sides: 40,
+                matrix: new Matrix(4, 4),
                 animation: {
                     axis: "y",
-                    rps: 0.5
+                    rps: 0.2
                 }
             },
             {
@@ -80,21 +90,23 @@ function init() {
                 center: Vector3(0, 30, -20),
                 radius: 5,
                 height: 10,
-                sides: 12,
+                sides: 25,
+                matrix: new Matrix(4, 4),
                 animation: {
-                    axis: "z",
-                    rps: 1
+                    axis: "x",
+                    rps: 0.7
                 }
             },
             {
                 type: "sphere",
                 center: Vector3(10, 40, -50),
                 radius: 10,
-                slices: 10,
-                stacks: 10,
+                slices: 20,
+                stacks: 20,
+                matrix: new Matrix(4, 4),
                 animation: {
-                    axis: "x",
-                    rps: 2
+                    axis: "z",
+                    rps: 0.3
                 }
             }
         ]
@@ -104,43 +116,74 @@ function init() {
     document.addEventListener('keydown', onKeyDown, false);
 
     // start animation loop
-    start_time = performance.now(); // current timestamp in milliseconds
+    start_time = performance.now();
     window.requestAnimationFrame(animate);
 }
 
 // Animation loop - repeatedly calls rendering code
 function animate(timestamp) {
     // step 1: calculate time (time since start)
-    let time = timestamp - start_time;
-
-    console.log(time)
+    let time = (timestamp - start_time) / 1000.0;
 
     // step 2: transform models based on time
+    for (let m = 0; m < scene.models.length; m++) {
+        let shape = scene.models[m]; // model
 
+        if (shape.hasOwnProperty('animation')) {
+            let modelType = shape.type; // type of model
+            let center = Vector4(0, 0, 0, 1); // center
+            let rotationAxis = shape.animation.axis; // rotation about axis
+            let rps = shape.animation.rps; // revolutions per sec
+
+            // Find center of the shape => Translate the center to the origin
+            if (modelType == 'generic') {
+                for (let i = 0; i < shape.vertices.length; i++) {
+                    center.x += shape.vertices[i].x / shape.vertices.length;
+                    center.y += shape.vertices[i].y / shape.vertices.length;
+                    center.z += shape.vertices[i].z / shape.vertices.length;
+                }
+            } else {
+                center = shape.center;
+            }
+
+            let theta = 360 * rps * time; // angle of rotation based on time
+
+            let toOrigin = new Matrix(4, 4);
+            mat4x4Translate(toOrigin, -center.x, -center.y, -center.z);
+
+            // Rotate the vertex about shape's indicated axis
+            let rotate = new Matrix(4, 4);
+            if (rotationAxis == 'x') {
+                mat4x4RotateX(rotate, theta);
+            }
+            else if (rotationAxis == 'y') {
+                mat4x4RotateY(rotate, theta);
+            }
+            else if (rotationAxis == 'z') {
+                mat4x4RotateZ(rotate, theta);
+            }
+
+            // Translate the a vertex back to where it was
+            let back = new Matrix(4, 4);
+            mat4x4Translate(back, center.x, center.y, center.z);
+
+            // Assign to tranformation matrix of the shape
+            shape.matrix = Matrix.multiply([back, rotate, toOrigin]);
+        }
+    }
 
     // step 3: draw scene
     drawScene();
 
     // step 4: request next animation frame (recursively calling same function)
     // (may want to leave commented out while debugging initially)
-    //window.requestAnimationFrame(animate);
+    window.requestAnimationFrame(animate);
 }
-
-function rotateX(theta){
-
-}
-
-function rotateY(theta){
-
-}
-
-
 
 // Main drawing code - use information contained in variable `scene`
 function drawScene() {
     ctx.clearRect(0, 0, view.width, view.height);
-    console.log(scene);
-    let projectionType = scene.view.type;
+    let projectionType = scene.view.type; // projection type
     let transform = new Matrix(4, 4); // N_par or N_per
     let projection_M = new Matrix(4, 4); // M_par or M_per
 
@@ -181,19 +224,17 @@ function drawScene() {
             modelVertices = sphere.vertices;
             modelEdges = sphere.edges;
         }
-        
-
-        //console.log(modelVertices);
-        //console.log(modelEdges)
 
         let vertices = []; // list of vertices after 3D transformation
         let clippedLines = []; // array of edges after clipping
 
+        // TRANSFORM each vertex of shape
         for (let j = 0; j < modelVertices.length; j++) {
-            let vertex = Matrix.multiply([transform, modelVertices[j]]);
+            let vertex = Matrix.multiply([transform, model.matrix, modelVertices[j]]);
             vertices.push(vertex);
         }
 
+        // CLIP the shape against the view volume
         for (let j = 0; j < modelEdges.length; j++) { // for each edge array
             let edges = modelEdges[j]; // edge array
             for (let k = 0; k < edges.length - 1; k++) { // for each edge in array
@@ -211,7 +252,7 @@ function drawScene() {
                     let z_min = -scene.view.clip[4] / scene.view.clip[5];
                     clippedEdge = clipLinePerspective(edge, z_min);
                 }
-                if(clippedEdge != null) {
+                if (clippedEdge != null) {
                     clippedLines.push(clippedEdge); // add clipped edge to clippedLines array
                 }
             }
@@ -252,8 +293,8 @@ function drawScene() {
         }
 
         // Draw line
-        for (let i = 0; i < pt0Array.length; i++) {
-            drawLine(pt0Array[i].x, pt0Array[i].y, pt1Array[i].x, pt1Array[i].y);
+        for (let k = 0; k < pt0Array.length; k++) {
+            drawLine(pt0Array[k].x, pt0Array[k].y, pt1Array[k].x, pt1Array[k].y, i);
         }
     }
 }
@@ -301,8 +342,8 @@ function createCylinder(center, radius, height, sides) {
     for (let i = 0; i < sides; i++) {
         let x = center.x + Math.cos((Math.PI / 180) * i * degree) * radius;
         let z = center.z + Math.sin((Math.PI / 180) * i * degree) * radius;
-        let y_top = center.y + height/2;
-        let y_bottom = center.y - height/2;
+        let y_top = center.y + height / 2;
+        let y_bottom = center.y - height / 2;
 
         vertices.push(Vector4(x, y_top, z, 1));
         vertices.push(Vector4(x, y_bottom, z, 1));
@@ -311,8 +352,8 @@ function createCylinder(center, radius, height, sides) {
     let arr1 = [];
     let arr2 = [];
     for (let i = 0; i < sides; i++) {
-        arr1[i] = 2*i;
-        arr2[i] = 2*i + 1;
+        arr1[i] = 2 * i;
+        arr2[i] = 2 * i + 1;
     }
     arr1.push(0);
     arr2.push(1);
@@ -336,24 +377,26 @@ function createCone(center, radius, height, sides) {
     let edges = [];
     let degree = 360 / sides;
 
+    // The center is on the at 1/4 height from the bottom
     // Find coordinates of points
     for (let i = 0; i < sides; i++) {
         let x = center.x + Math.cos((Math.PI / 180) * i * degree) * radius;
         let z = center.z + Math.sin((Math.PI / 180) * i * degree) * radius;
-        let y = center.y;
+        let y = center.y - 1 / 4 * height;
 
         vertices.push(Vector4(x, y, z, 1));
     }
 
-    vertices.push(Vector4(center.x, center.y + height, center.z, 1));
+    // Top vertex
+    vertices.push(Vector4(center.x, center.y + 3 / 4 * height, center.z, 1));
 
     let arr1 = [];
 
     for (let i = 0; i < sides; i++) {
         arr1.push(i);
-        edges.push([i,vertices.length - 1]);
+        edges.push([i, vertices.length - 1]);
     }
-    
+
     arr1.push(0);
     edges.push(arr1);
 
@@ -364,8 +407,7 @@ function createCone(center, radius, height, sides) {
     return cone;
 }
 
-// CREATE SPHERE
-// I am deciding that slices are vertical slices and stacks are horizontal stacks
+// CREATE SPHERE (slices are vertical slices and stacks are horizontal stacks)
 function createSphere(center, radius, slices, stacks) {
     let vertices = [];
     let edges = [];
@@ -386,8 +428,13 @@ function createSphere(center, radius, slices, stacks) {
 
     for (let r = 0; r < stacks; r++) {
         for (let c = 0; c < slices; c++) {
-            edges.push([slices*r + c, slices*(r+1) + c]);
-            edges.push([slices*r + c, slices*r + c + 1]);
+            edges.push([slices * r + c, slices * (r + 1) + c]);
+            if (c != slices - 1) {
+                edges.push([slices * r + c, slices * r + c + 1]);
+            }
+            else {
+                edges.push([slices * r + c, slices * r]);
+            }
         }
     }
 
@@ -447,8 +494,8 @@ function outcodePerspective(vertex, z_min) {
     return outcode;
 }
 
-// Clip line - should either return a new line (with two endpoints inside view volume) or null (if line is completely outside view volume)
-// fix
+// Clip line - should either return a new line (with two endpoints inside view volume) 
+// or null (if line is completely outside view volume) fix
 function clipLineParallel(line) {
     let p0 = Vector3(line.pt0.x, line.pt0.y, line.pt0.z);
     let p1 = Vector3(line.pt1.x, line.pt1.y, line.pt1.z);
@@ -461,9 +508,9 @@ function clipLineParallel(line) {
 
     let trivial = false;
     while (!trivial) {
-        if ((out0 | out1) == 0) {
+        if ((out0 | out1) == 0) { // if 2 outcodes bitwise OR = 0 => trivial accept
             trivial = true;
-        } else if ((out0 & out1) != 0) {
+        } else if ((out0 & out1) != 0) { // if 2 outcodes bitwise AND != 0 => trivial reject
             trivial = true;
             result = null;
         } else {
@@ -533,16 +580,8 @@ function clipLinePerspective(line, z_min) {
     let p0 = Vector3(line.pt0.x, line.pt0.y, line.pt0.z);
     let p1 = Vector3(line.pt1.x, line.pt1.y, line.pt1.z);
     let result = {
-        pt0: {
-            x: p0.x,
-            y: p0.y,
-            z: p0.z
-        },
-        pt1: {
-            x: p1.x,
-            y: p1.y,
-            z: p1.z
-        }
+        pt0: Vector3(p0.x, p0.y, p0.z),
+        pt1: Vector3(p1.x, p1.y, p1.z)
     };
     let out0 = outcodePerspective(p0, z_min);
     let out1 = outcodePerspective(p1, z_min);
@@ -576,7 +615,9 @@ function clipLinePerspective(line, z_min) {
             deltax = p1.x - p0.x;
             deltay = p1.y - p0.y;
             deltaz = p1.z - p0.z;
+
             let intersect = Vector3(x, y, z);
+
             // find first bit set to 1, I think they should waterfall down in this order, no extra work needed?? - wrong
             if ((out0 & LEFT) == LEFT) {
                 t = (-p0.x + p0.z) / (deltax - deltaz);
@@ -596,6 +637,7 @@ function clipLinePerspective(line, z_min) {
             else {
                 t = (p0.z - z_min) / (-deltaz);
             }
+
             // calculate intersection point based on t calculated above
             intersect.x = (1 - t) * p0.x + t * p1.x;
             intersect.y = (1 - t) * p0.y + t * p1.y;
@@ -606,17 +648,10 @@ function clipLinePerspective(line, z_min) {
 
             // Create new line to return
             result = {
-                pt0: {
-                    x: p0.x,
-                    y: p0.y,
-                    z: p0.z
-                },
-                pt1: {
-                    x: p1.x,
-                    y: p1.y,
-                    z: p1.z
-                }
+                pt0: Vector3(p0.x, p0.y, p0.z),
+                pt1: Vector3(p1.x, p1.y, p1.z)
             };
+
             // recalculate endpoint outcode; since I might have switched p0 and p1, I also recalculate for p1
             out0 = outcodePerspective(p0, z_min);
             out1 = outcodePerspective(p1, z_min);
@@ -639,18 +674,19 @@ function onKeyDown(event) {
     v_axis.normalize();
 
     // define transformation matrices for left/right
-    let toOrigin = new Matrix(4,4);
+    let toOrigin = new Matrix(4, 4);
     mat4x4Translate(toOrigin, -scene.view.prp.x, -scene.view.prp.y, -scene.view.prp.z);
 
-    let back = new Matrix(4,4);
+    let back = new Matrix(4, 4);
     mat4x4Translate(back, scene.view.prp.x, scene.view.prp.y, scene.view.prp.z);
 
-    let rotateV = new Matrix(4,4);
-    let newSRP = new Matrix(4,1);
+    let rotateV = new Matrix(4, 4);
+    let newSRP = new Matrix(4, 1);
     let srpHomogenous = Vector4(scene.view.srp.x, scene.view.srp.y, scene.view.srp.z, 1);
 
     switch (event.keyCode) {
         case 37: // LEFT Arrow
+            console.log("left");
             mat4x4RotateGivenAxis(rotateV, v_axis, 5);
             newSRP = Matrix.multiply([back, rotateV, toOrigin, srpHomogenous]);
             scene.view.srp.x = newSRP.x;
@@ -658,8 +694,9 @@ function onKeyDown(event) {
             scene.view.srp.z = newSRP.z;
             break;
         case 39: // RIGHT Arrow
+            console.log("right");
             mat4x4RotateGivenAxis(rotateV, v_axis, -5);
-            // Translate SRP to the origin, rotate it, and translate it back to where it was
+
             newSRP = Matrix.multiply([back, rotateV, toOrigin, srpHomogenous]);
             scene.view.srp.x = newSRP.x;
             scene.view.srp.y = newSRP.y;
@@ -688,7 +725,7 @@ function onKeyDown(event) {
             scene.view.srp = scene.view.srp.subtract(n_axis);
             break;
     }
-    drawScene();
+    // drawScene();
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -731,14 +768,23 @@ function loadNewScene() {
 }
 
 // Draw black 2D line with red endpoints 
-function drawLine(x1, y1, x2, y2) {
-    ctx.strokeStyle = '#000000';
+function drawLine(x1, y1, x2, y2, index) {
+    // colors red through pink
+    let color = ["rgb(255,0,0)", "rgb(255,128,0)", "rgb(255,255,0)", "rgb(0,255,0)", "rgb(51, 51, 255)", "rgb(153, 51, 255)", "rgb(255, 51, 255)", "rgb(255, 0, 127)"];
+    let myIndex = index*2 % color.length;
+    var gradient = ctx.createLinearGradient(x1, y1, x2, y2);
+    gradient.addColorStop("0", color[myIndex]);
+    gradient.addColorStop("0.25" , color[(myIndex + 1)%color.length]);
+    gradient.addColorStop(".5", color[(myIndex + 2)%color.length]);
+    gradient.addColorStop("0.75" , color[(myIndex + 3)%color.length]);
+    gradient.addColorStop("1.0", color[(myIndex + 4)%color.length]);
+    ctx.strokeStyle = gradient;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
     ctx.stroke();
 
-    ctx.fillStyle = '#FF0000';
+    ctx.fillStyle = '#000000';
     ctx.fillRect(x1 - 2, y1 - 2, 4, 4);
     ctx.fillRect(x2 - 2, y2 - 2, 4, 4);
 }

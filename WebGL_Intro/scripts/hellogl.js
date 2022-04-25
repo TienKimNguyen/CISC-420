@@ -113,9 +113,9 @@ function animate(timestamp){
 
     app.x_position += app.x_velocity * delta_t;
 
-    if(app.x_position > (canvas.width / 2) - 200.0){
+    if(app.x_position > (canvas.width / 2)){
         app.x_velocity *= -1.0;
-    } else  if (app.x_position < -((canvas.width / 2) - 200.0)){
+    } else  if (app.x_position < -((canvas.width / 2) -200.0)){
         app.x_velocity *= -1.0;
     }
 
